@@ -1,5 +1,6 @@
 using API.Data;
 using API.DTOs.Comment;
+using API.Helpers;
 using API.Interfaces;
 using API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -13,9 +14,18 @@ namespace API.Repositories
         {
             _context = context;
         }
-         public async Task<List<Comment>> GetAllAsync()
+        public async Task<List<Comment>> GetAllAsync(CommentQueyObject query)
         {
-            return await _context.Comments.Include(c => c.AppUser).ToListAsync();
+            var comments = _context.Comments.Include(c => c.AppUser).AsQueryable();
+            if (!string.IsNullOrWhiteSpace(query.Symbol))
+            {
+                comments = comments.Where(s => s.Stock.Symbol.Contains(query.Symbol));
+            }
+            if (query.IsDescending == true)
+            {
+                comments = comments.OrderByDescending(c => c.CreatedAt);
+            }
+            return await comments.ToListAsync();
         }
 
         public async Task<Comment?> GetByIdAsync(int id)
@@ -29,11 +39,11 @@ namespace API.Repositories
             await _context.SaveChangesAsync();
         }
 
-          public async Task<Comment?> UpdateAsync(int id, UpdateCommentRequest request)
+        public async Task<Comment?> UpdateAsync(int id, UpdateCommentRequest request)
         {
             var existedComment = await _context.Comments.FirstOrDefaultAsync(c => c.Id == id);
-            if(existedComment == null)
-            {   
+            if (existedComment == null)
+            {
                 return null;
             }
             existedComment.Title = request.Title;
@@ -45,9 +55,9 @@ namespace API.Repositories
         public async Task<Comment?> DeleteAsync(int id)
         {
             var comment = await _context.Comments.FirstOrDefaultAsync(c => c.Id == id);
-            if(comment == null)
+            if (comment == null)
             {
-                return null;    
+                return null;
             }
             _context.Comments.Remove(comment);
             await _context.SaveChangesAsync();

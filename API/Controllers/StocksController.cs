@@ -4,6 +4,7 @@ using API.Models;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using API.Helpers;
+using Microsoft.AspNetCore.Authorization;
 
 namespace API.Controllers
 {
@@ -58,6 +59,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
+        [Authorize]
         public async Task<ActionResult> CreateNewStockAsync([FromBody] CreateStockRequest request)
         {
             try
@@ -79,6 +81,7 @@ namespace API.Controllers
 
         [HttpPut]
         [Route("{id:int}")]
+        [Authorize]
         public async Task<ActionResult<StockDTO>> UpdateStockByIdAsync([FromRoute] int id, [FromBody] UpdateStockRequest request)
         {
             try
@@ -103,6 +106,7 @@ namespace API.Controllers
 
         [HttpDelete]
         [Route("{id:int}")]
+        [Authorize]
         public async Task<ActionResult> DeleteStockByIdAsync([FromRoute] int id)
         {
             try

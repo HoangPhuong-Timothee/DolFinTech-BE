@@ -1,8 +1,10 @@
 using API.DTOs.Comment;
 using API.Extensions;
+using API.Helpers;
 using API.Interfaces;
 using API.Models;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,19 +18,22 @@ namespace API.Controllers
         private readonly IStockRepository _stockRepo;
         private readonly IMapper _mapper;
         private readonly UserManager<AppUser> _userManager;
-        public CommentsController(IMapper mapper, ICommentRepository commentRepo, IStockRepository stockRepo, UserManager<AppUser> userManager)
+        private readonly IFMPService _fmpService;
+        public CommentsController(IFMPService fMPService, IMapper mapper, ICommentRepository commentRepo, IStockRepository stockRepo, UserManager<AppUser> userManager)
         {
             _mapper = mapper;
             _stockRepo = stockRepo;
             _commentRepo = commentRepo;
             _userManager = userManager;
+            _fmpService = fMPService;
         }
         [HttpGet]
-        public async Task<ActionResult<List<CommentDTO>>> GetAllComments()
+        [Authorize]
+        public async Task<ActionResult<List<CommentDTO>>> GetAllComments([FromQuery] CommentQueyObject query)
         {
-            try 
+            try
             {
-                var comments = await _commentRepo.GetAllAsync();
+                var comments = await _commentRepo.GetAllAsync(query);
                 var response = _mapper.Map<List<CommentDTO>>(comments);
                 return Ok(response);
             }
@@ -60,14 +65,28 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Route("{stockId:int}")]
-        public async Task<ActionResult<CommentDTO>> CreateCommentAsync([FromRoute] int stockId, [FromBody] CreateCommentRequest request)
+        [Route("{symbol:alpha}")]
+        [Authorize]
+        public async Task<ActionResult<CommentDTO>> CreateCommentAsync([FromRoute] string symbol, [FromBody] CreateCommentRequest request)
         {
             try
             {
-                if(!await _stockRepo.IsStockExist(stockId))
+                if (!ModelState.IsValid)
                 {
-                    return BadRequest("Stock not found.");
+                    return BadRequest(ModelState);
+                }
+                var stock = await _stockRepo.GetBySymbolAsync(symbol);
+                if (stock == null)
+                {
+                    stock = await _fmpService.FindStockBySymbolAsync(symbol);
+                    if (stock == null)
+                    {
+                        return BadRequest("Stock does not exists");
+                    }
+                    else
+                    {
+                        await _stockRepo.CreateAsync(stock);
+                    }
                 }
                 var userName = User.GetUserName();
                 var user = await _userManager.FindByNameAsync(userName);
@@ -75,7 +94,7 @@ namespace API.Controllers
                 comment.AppUserId = user.Id;
                 await _commentRepo.CreateAsync(comment);
                 var response = _mapper.Map<CommentDTO>(comment);
-                return CreatedAtAction("GetCommentById", new { id = comment.Id}, response);
+                return CreatedAtAction("GetCommentById", new { id = comment.Id }, response);
             }
             catch (Exception e)
             {
@@ -85,11 +104,12 @@ namespace API.Controllers
 
         [HttpPut]
         [Route("{id:int}")]
+        [Authorize]
         public async Task<ActionResult> UpdateCommentAsync([FromRoute] int id, [FromRoute] UpdateCommentRequest request)
         {
             try
             {
-                if(!ModelState.IsValid)
+                if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
                 }
@@ -100,7 +120,7 @@ namespace API.Controllers
                 }
                 var response = _mapper.Map<CommentDTO>(updateComment);
                 return Ok(response);
-            }  
+            }
             catch (Exception e)
             {
                 return StatusCode(500, e);
@@ -109,21 +129,22 @@ namespace API.Controllers
 
         [HttpDelete]
         [Route("{id:int}")]
+        [Authorize]
         public async Task<ActionResult> DeleteCommentAsync([FromRoute] int id)
         {
-           try
-           {
+            try
+            {
                 var deleteComment = await _commentRepo.DeleteAsync(id);
                 if (deleteComment == null)
                 {
                     return NotFound("Comment not found.");
                 }
-            return NoContent();
-           }
-           catch (Exception e)
-           {
+                return NoContent();
+            }
+            catch (Exception e)
+            {
                 return StatusCode(500, e);
-           }
+            }
         }
     }
 }
